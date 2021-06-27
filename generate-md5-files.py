@@ -32,7 +32,7 @@ def save_hash(hash, file_path, md5_file_path):
         with open(md5_file_path, 'w', encoding='ansi') as fpw:
             fpw.write(hash)
     if args.db_switch:
-        db[file_path] = hash
+        db[os.path.relpath(file_path,base_folder)] = hash
 
 def generate_md5_file(file_path, md5_file_path):
     hash = md5(file_path)
@@ -45,7 +45,7 @@ def verify_md5_file(file_path, md5_file_path):
     return hash == saved_hash, saved_hash, hash
     
 def verify_md5_db(file_path):
-    saved_hash = db[file_path]
+    saved_hash = db[os.path.relpath(file_path,base_folder)]
     hash = md5(file_path)
     return hash == saved_hash, saved_hash, hash
     
@@ -68,7 +68,7 @@ def do_file(file_path):
         equal, old_hash, new_hash = verify_md5_file(file_path, md5_file_path)
         if not equal:
             handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash)
-    elif args.db_switch and file_path in db:
+    elif args.db_switch and os.path.relpath(file_path,base_folder) in db:
         equal, old_hash, new_hash = verify_md5_db(file_path)
         if not equal:
             handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash)
@@ -110,6 +110,7 @@ else:
         if not os.path.isdir(md5_folder):
             os.makedirs(md5_folder)
         db = SqliteDict(os.path.join(md5_folder, 'md5.sqlite'))
+    base_folder = os.path.abspath(args.path)
     do_folder(os.path.abspath(args.path))
     
     if args.db_switch:
