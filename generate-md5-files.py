@@ -32,7 +32,6 @@ def save_hash(hash, file_path, md5_file_path):
         with open(md5_file_path, 'w', encoding='ansi') as fpw:
             fpw.write(hash)
     if args.db_switch:
-        
         db[file_path] = hash
 
 def generate_md5_file(file_path, md5_file_path):
@@ -43,7 +42,13 @@ def verify_md5_file(file_path, md5_file_path):
     hash = md5(file_path)
     with open(md5_file_path, 'r', encoding='ansi') as fp:
         saved_hash = fp.read()
-        return hash == saved_hash, saved_hash, hash
+    return hash == saved_hash, saved_hash, hash
+    
+def verify_md5_db(file_path):
+    saved_hash = db[file_path]
+    hash = md5(file_path)
+    return hash == saved_hash, saved_hash, hash
+    
     
 def handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash):
     print('{} has different md5 hash, it was {}, now it is {}'.format(file_path, old_hash, new_hash))
@@ -52,7 +57,7 @@ def handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash):
         if not args.quite_mode:
             update = query_yes_no('update md5 hash?')
         if update:
-            save_hash(hash, file_path, md5_file_path)
+            save_hash(new_hash, file_path, md5_file_path)
 
 def do_file(file_path):
     if not os.path.isfile(file_path):
@@ -63,13 +68,18 @@ def do_file(file_path):
         equal, old_hash, new_hash = verify_md5_file(file_path, md5_file_path)
         if not equal:
             handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash)
+    elif args.db_switch and file_path in db:
+        equal, old_hash, new_hash = verify_md5_db(file_path)
+        if not equal:
+            handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash)
     else:
         generate_md5_file(file_path, md5_file_path)
                 
         
 def do_folder(path):
     main_name, _ = os.path.splitext(os.path.basename(path))
-    if main_name == '' or main_name[0] == '.':
+    # ignore special folders
+    if main_name == '' or main_name[0] == '.' or main_name[0] == '_':
         return
     print(path, end='\n', flush=True)
     if path == os.getcwd():
