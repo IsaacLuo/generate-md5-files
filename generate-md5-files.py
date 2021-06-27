@@ -1,10 +1,10 @@
 import os
-import subprocess
 import sys
 import argparse
 import hashlib
 from query_yes_no import query_yes_no
-
+from sqlitedict import SqliteDict
+import subprocess
 
 parser = argparse.ArgumentParser(description='genreate md5 files')
 parser.add_argument(dest='path', help='root folder or filename')
@@ -12,12 +12,14 @@ parser.add_argument('--verify', dest="verify", action='store_true', default=Fals
 parser.add_argument('-R', dest="recursive", action='store_true', default=False)
 parser.add_argument('-f', dest="force", action='store_true', default=False, help="overwrite md5 files if exists")
 parser.add_argument('-q', dest='quite_mode',action='store_true', default=False)
-parser.add_argument('--md5', dest='md5_switch',action='store_true', default=True)
-parser.add_argument('--csv', dest='csv_switch',action='store_true', default=False)
+parser.add_argument('--md5', dest='md5_switch',action='store_true', default=False)
+# parser.add_argument('--csv', dest='csv_switch',action='store_true', default=False)
+parser.add_argument('--db', dest='db_switch',action='store_true', default=False)
+parser.add_argument('--clear-md5', dest='clear_md5',action='store_true', default=False)
 
 
 args = parser.parse_args()
-
+    
 def md5(file_path):
     hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -25,10 +27,17 @@ def md5(file_path):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
+def save_hash(hash, file_path, md5_file_path):
+    if args.md5_switch:
+        with open(md5_file_path, 'w', encoding='ansi') as fpw:
+            fpw.write(hash)
+    if args.db_switch:
+        
+        db[file_path] = hash
+
 def generate_md5_file(file_path, md5_file_path):
     hash = md5(file_path)
-    with open(md5_file_path, 'w', encoding='ansi') as fpw:
-        fpw.write(hash)
+    save_hash(hash, file_path, md5_file_path)
         
 def verify_md5_file(file_path, md5_file_path):
     hash = md5(file_path)
@@ -43,9 +52,7 @@ def handle_hash_mismatching(file_path, md5_file_path, old_hash, new_hash):
         if not args.quite_mode:
             update = query_yes_no('update md5 hash?')
         if update:
-            with open(md5_file_path, 'w', encoding='ansi') as fpw:
-                fpw.write(new_hash)
-            
+            save_hash(hash, file_path, md5_file_path)
 
 def do_file(file_path):
     if not os.path.isfile(file_path):
@@ -61,28 +68,40 @@ def do_file(file_path):
                 
         
 def do_folder(path):
+    main_name, _ = os.path.splitext(os.path.basename(path))
+    if main_name == '' or main_name[0] == '.':
+        return
     print(path, end='\n', flush=True)
-    file_names = os.listdir(path)
+    if path == os.getcwd():
+        return
+    try:
+        file_names = os.listdir(path)
+    except:
+        return
     for file_name in file_names:
-        _, ext = os.path.splitext(file_name)
-        if os.path.isfile(file_name) and ext != '.md5':
-            do_file(os.path.abspath(file_name))
-        elif os.path.isdir(file_name) and args.recursive:
-            do_folder(os.path.abspath(file_name))
+        file_path = os.path.join(path, file_name)
+        _, ext = os.path.splitext(file_path)
+        if ext == ".md5" and args.clear_md5 and not args.md5_switch:
+            os.remove(file_path)
+        if os.path.isfile(file_path) and ext != '.md5':
+            do_file(file_path)
+        elif os.path.isdir(file_path) and args.recursive:
+            do_folder(file_path)
+    if args.db_switch:
+        db.commit()
     
 
 if os.path.isfile(args.path):
     do_file(args.path)
     print()
 else:
+    if args.db_switch:
+        md5_folder = os.path.abspath(os.path.join(args.path, '.md5'))
+        if not os.path.isdir(md5_folder):
+            os.makedirs(md5_folder)
+        db = SqliteDict(os.path.join(md5_folder, 'md5.sqlite'))
     do_folder(os.path.abspath(args.path))
-    print()
-
-# csv_file = args.csv_file
-
-# with open(csv_file, 'r', encoding='utf8') as fp:
-#     csv_reader = csv.reader(fp)
-#     for row in csv_reader:
-#         if row[2] == "False":
-#             print(row[0], row[1])
-#             subprocess.run(['C:/Users/luoyi/Desktop/Beyond Compare 4/BCompare.exe', row[0], row[1]])
+    
+    if args.db_switch:
+        db.close()
+        print()
